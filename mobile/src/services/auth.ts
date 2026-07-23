@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const API_BASE = 'http://10.0.2.2:8080'; // Android emulator; use localhost for iOS or your machine's IP for a physical device
 
 export interface AuthUser {
@@ -18,6 +20,8 @@ export interface RegisterCredentials {
   password: string;
 }
 
+const SESSION_KEY = '@auth_session';
+
 const handleResponse = async (res: Response) => {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -32,7 +36,9 @@ export const loginUser = async (credentials: LoginCredentials): Promise<AuthUser
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
   });
-  return handleResponse(res);
+  const user = await handleResponse(res);
+  await saveSession(user);
+  return user;
 };
 
 export const registerUser = async (credentials: RegisterCredentials): Promise<AuthUser> => {
@@ -41,5 +47,24 @@ export const registerUser = async (credentials: RegisterCredentials): Promise<Au
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
   });
-  return handleResponse(res);
+  const user = await handleResponse(res);
+  await saveSession(user);
+  return user;
 };
+
+export const saveSession = async (user: AuthUser): Promise<void> => {
+  await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(user));
+};
+
+export const getSession = async (): Promise<AuthUser | null> => {
+  const data = await AsyncStorage.getItem(SESSION_KEY);
+  if (data) {
+    return JSON.parse(data) as AuthUser;
+  }
+  return null;
+};
+
+export const clearSession = async (): Promise<void> => {
+  await AsyncStorage.removeItem(SESSION_KEY);
+};
+
