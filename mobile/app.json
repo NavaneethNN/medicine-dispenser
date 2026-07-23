@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Medicine Dispenser",
+    "slug": "medicine-dispenser",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "medicine-dispenser",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
