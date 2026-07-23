@@ -1,0 +1,40 @@
+# Environment secrets
+.env
+
+# Dependencies
+node_modules/
+
+# Expo / React Native
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+dist/
+ios/
+android/
+
+# Java / Spring Boot
+server/target/
+*.jar
+*.war
+
+# Prisma
+prisma/migrations/
+prisma/generated/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Testing
+coverage/
