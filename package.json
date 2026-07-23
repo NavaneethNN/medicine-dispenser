@@ -1,0 +1,14 @@
+{
+  "name": "medicine-dispenser",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n server,mobile -c blue,green \"npm:dev:server\" \"npm:dev:mobile\"",
+    "dev:server": "cd server && dotenv -e ../.env -- mvn spring-boot:run",
+    "dev:mobile": "cd mobile && npx expo start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^7.4.0"
+  }
+}
