@@ -23,7 +23,6 @@ server/target/
 *.war
 
 # Prisma
-prisma/migrations/
 prisma/generated/
 
 # Logs & OS
