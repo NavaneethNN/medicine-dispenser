@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-const API_BASE = 'http://10.0.2.2:8080'; // Android emulator; use localhost for iOS or your machine's IP for a physical device
+const API_BASE = Platform.OS === 'web' ? 'http://localhost:8080' : 'http://10.0.2.2:8080';
 
 export interface AuthUser {
   id: string;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,88 +8,111 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-
-interface Device {
-  id: string;
-  name: string;
-  deviceUid: string;
-  firmwareVersion: string;
-  status: 'online' | 'offline';
-  lastSync: string;
-}
+import {
+  fetchDevices,
+  createDevice,
+  renameDevice,
+  deleteDevice,
+  Device as DeviceType,
+} from '../services/device';
 
 interface DevicesScreenProps {
   onBack: () => void;
 }
 
-const mockDevices: Device[] = [
-  {
-    id: '1',
-    name: 'Living Room Dispenser',
-    deviceUid: 'MD-2024-001',
-    firmwareVersion: 'v2.1.0',
-    status: 'online',
-    lastSync: '2 min ago',
-  },
-  {
-    id: '2',
-    name: 'Bedroom Dispenser',
-    deviceUid: 'MD-2024-002',
-    firmwareVersion: 'v2.0.5',
-    status: 'offline',
-    lastSync: '3 hours ago',
-  },
-];
+const formatLastSync = (iso: string | null): string => {
+  if (!iso) return 'Never';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+};
 
 export default function DevicesScreen({ onBack }: DevicesScreenProps) {
-  const [devices, setDevices] = useState<Device[]>(mockDevices);
+  const [devices, setDevices] = useState<DeviceType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<Device | null>(null);
+  const [renameTarget, setRenameTarget] = useState<DeviceType | null>(null);
   const [newName, setNewName] = useState('');
   const [newUid, setNewUid] = useState('');
   const [renameName, setRenameName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleAddDevice = () => {
+  const loadDevices = useCallback(async () => {
+    try {
+      const data = await fetchDevices();
+      setDevices(data);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load devices');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDevices();
+  }, [loadDevices]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadDevices();
+  };
+
+  const handleAddDevice = async () => {
     if (!newName.trim() || !newUid.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    const device: Device = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      deviceUid: newUid.trim(),
-      firmwareVersion: 'v2.1.0',
-      status: 'online',
-      lastSync: 'Just now',
-    };
-    setDevices([...devices, device]);
-    setNewName('');
-    setNewUid('');
-    setShowAddModal(false);
+    setSubmitting(true);
+    try {
+      const device = await createDevice({ name: newName.trim(), deviceUid: newUid.trim() });
+      setDevices([...devices, device]);
+      setNewName('');
+      setNewUid('');
+      setShowAddModal(false);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to add device');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRename = (device: Device) => {
+  const handleRename = (device: DeviceType) => {
     setRenameTarget(device);
     setRenameName(device.name);
     setShowRenameModal(true);
   };
 
-  const confirmRename = () => {
+  const confirmRename = async () => {
     if (!renameName.trim()) {
       Alert.alert('Error', 'Please enter a device name');
       return;
     }
-    setDevices(devices.map(d =>
-      d.id === renameTarget?.id ? { ...d, name: renameName.trim() } : d
-    ));
-    setShowRenameModal(false);
-    setRenameTarget(null);
-    setRenameName('');
+    setSubmitting(true);
+    try {
+      const updated = await renameDevice(renameTarget!.id, renameName.trim());
+      setDevices(devices.map(d => d.id === updated.id ? updated : d));
+      setShowRenameModal(false);
+      setRenameTarget(null);
+      setRenameName('');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to rename device');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRemove = (device: Device) => {
+  const handleRemove = (device: DeviceType) => {
     Alert.alert(
       'Remove Device',
       `Are you sure you want to remove "${device.name}"?`,
@@ -98,14 +121,26 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => setDevices(devices.filter(d => d.id !== device.id)),
+          onPress: async () => {
+            try {
+              await deleteDevice(device.id);
+              setDevices(devices.filter(d => d.id !== device.id));
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to remove device');
+            }
+          },
         },
       ]
     );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.backBtn}>
@@ -117,8 +152,12 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Device List */}
-      {devices.length === 0 ? (
+      {/* Loading */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PRIMARY} />
+        </View>
+      ) : devices.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No devices yet</Text>
           <Text style={styles.emptyDesc}>Tap "Add" to pair your first dispenser</Text>
@@ -152,7 +191,7 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Last Sync</Text>
-                  <Text style={styles.detailValue}>{device.lastSync}</Text>
+                  <Text style={styles.detailValue}>{formatLastSync(device.lastSync)}</Text>
                 </View>
               </View>
 
@@ -199,8 +238,8 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
               <TouchableOpacity style={styles.modalCancelBtn} activeOpacity={0.7} onPress={() => setShowAddModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} activeOpacity={0.7} onPress={handleAddDevice}>
-                <Text style={styles.modalConfirmText}>Add Device</Text>
+              <TouchableOpacity style={styles.modalConfirmBtn} activeOpacity={0.7} onPress={handleAddDevice} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalConfirmText}>Add Device</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -227,8 +266,8 @@ export default function DevicesScreen({ onBack }: DevicesScreenProps) {
               <TouchableOpacity style={styles.modalCancelBtn} activeOpacity={0.7} onPress={() => setShowRenameModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} activeOpacity={0.7} onPress={confirmRename}>
-                <Text style={styles.modalConfirmText}>Save</Text>
+              <TouchableOpacity style={styles.modalConfirmBtn} activeOpacity={0.7} onPress={confirmRename} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.modalConfirmText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -299,9 +338,13 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     textAlign: 'center',
   },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
   deviceList: {
     gap: 14,
-  },
+ },
   deviceCard: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
