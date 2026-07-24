@@ -4,9 +4,10 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import DevicesScreen from './src/screens/DevicesScreen';
 import { AuthUser, getSession, clearSession } from './src/services/auth';
 
-type Screen = 'login' | 'register' | 'home';
+type Screen = 'login' | 'register' | 'home' | 'devices';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
@@ -63,7 +64,14 @@ export default function App() {
         />
       )}
       {screen === 'home' && user && (
-        <DashboardScreen userName={user.name} onLogout={handleLogout} />
+        <DashboardScreen
+          userName={user.name}
+          onLogout={handleLogout}
+          onNavigate={(target) => setScreen(target as Screen)}
+        />
+      )}
+      {screen === 'devices' && (
+        <DevicesScreen onBack={() => setScreen('home')} />
       )}
       <StatusBar style="dark" />
     </>

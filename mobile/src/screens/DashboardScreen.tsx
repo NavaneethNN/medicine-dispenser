@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 interface DashboardScreenProps {
   userName: string;
   onLogout: () => void;
+  onNavigate: (screen: string) => void;
 }
 
 const menuItems = [
@@ -12,9 +13,9 @@ const menuItems = [
   { key: 'containers', label: 'Configured', desc: 'Configure medicine containers', icon: 'C' },
 ];
 
-export default function DashboardScreen({ userName, onLogout }: DashboardScreenProps) {
+export default function DashboardScreen({ userName, onLogout, onNavigate }: DashboardScreenProps) {
   const handleNavigate = (key: string) => {
-    // TODO: wire to navigation when screens are built
+    onNavigate(key);
   };
 
   return (
