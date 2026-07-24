@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "concurrently -n server,mobile -c blue,green \"npm:dev:server\" \"npm:dev:mobile\"",
     "dev:server": "cd server && dotenv -e ../.env -- mvn spring-boot:run",
-    "dev:mobile": "cd mobile && npx expo start"
+    "dev:mobile": "cd mobile && npx expo start",
+    "postinstall": "concurrently -n mobile,server -c green,blue \"npm --prefix mobile install\" \"cd server && mvn dependency:resolve -q\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
