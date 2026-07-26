@@ -1,6 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const API_BASE = 'http://10.0.2.2:8080'; // Android emulator; use localhost for iOS or your machine's IP for a physical device
+const DEFAULT_API_BASE = Platform.select({
+  android: 'http://10.0.2.2:8080',
+  ios: 'http://localhost:8080',
+  default: 'http://localhost:8080',
+});
+
+const getExpoHostApiBase = (): string | undefined => {
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (!hostUri) {
+    return undefined;
+  }
+
+  const host = hostUri.split(':')[0];
+  if (!host) {
+    return undefined;
+  }
+
+  return `http://${host}:8080`;
+};
+
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || getExpoHostApiBase() || DEFAULT_API_BASE || 'http://localhost:8080';
 
 export interface AuthUser {
   id: string;
