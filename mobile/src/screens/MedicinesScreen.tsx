@@ -7,10 +7,10 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Schedule } from '../services/storage';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const PRIMARY    = '#0D9488';
@@ -50,41 +50,50 @@ interface Device {
 interface MedicinesScreenProps {
   devices: Device[];
   medicines: Medicine[];
+  schedules: Schedule[];
   onMedicinesChange: (medicines: Medicine[]) => void;
+  onSchedulesChange: (schedules: Schedule[]) => void;
   onBack: () => void;
 }
 
+const MAX_QUANTITY = 8;
+
 // ─── Quantity Stepper ─────────────────────────────────────────────────────────
 function QuantityStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const atMin = value <= 1;
+  const atMax = value >= MAX_QUANTITY;
   return (
-    <View style={s.stepperRow}>
-      <TouchableOpacity
-        style={[s.stepBtn, value <= 1 && s.stepBtnDisabled]}
-        activeOpacity={value <= 1 ? 1 : 0.7}
-        onPress={() => value > 1 && onChange(value - 1)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Text style={[s.stepBtnText, value <= 1 && s.stepBtnTextDisabled]}>−</Text>
-      </TouchableOpacity>
+    <View>
+      <View style={s.stepperRow}>
+        <TouchableOpacity
+          style={[s.stepBtn, atMin && s.stepBtnDisabled]}
+          activeOpacity={atMin ? 1 : 0.7}
+          onPress={() => !atMin && onChange(value - 1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={[s.stepBtnText, atMin && s.stepBtnTextDisabled]}>−</Text>
+        </TouchableOpacity>
 
-      <TextInput
-        style={s.stepInput}
-        keyboardType="numeric"
-        value={String(value)}
-        onChangeText={v => {
-          const n = parseInt(v, 10);
-          if (!isNaN(n) && n >= 0) onChange(n);
-        }}
-      />
+        <TextInput
+          style={s.stepInput}
+          keyboardType="numeric"
+          value={String(value)}
+          onChangeText={v => {
+            const n = parseInt(v, 10);
+            if (!isNaN(n) && n >= 1 && n <= MAX_QUANTITY) onChange(n);
+          }}
+        />
 
-      <TouchableOpacity
-        style={s.stepBtn}
-        activeOpacity={0.7}
-        onPress={() => onChange(value + 1)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Text style={s.stepBtnText}>+</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.stepBtn, atMax && s.stepBtnDisabled]}
+          activeOpacity={atMax ? 1 : 0.7}
+          onPress={() => !atMax && onChange(value + 1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={[s.stepBtnText, atMax && s.stepBtnTextDisabled]}>+</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={s.stepperHint}>Max {MAX_QUANTITY} tablets per cartridge</Text>
     </View>
   );
 }
@@ -135,14 +144,20 @@ function MedicineCard({ med, onEdit, onDelete }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MedicinesScreen({
-  devices, medicines, onMedicinesChange, onBack,
+  devices,
+  medicines,
+  schedules,
+  onMedicinesChange,
+  onSchedulesChange,
+  onBack,
 }: MedicinesScreenProps) {
 
+  const [deleteTarget, setDeleteTarget]       = useState<Medicine | null>(null);
   const [showAdd, setShowAdd]             = useState(false);
   const [addDeviceId, setAddDeviceId]     = useState('');
   const [addSlot, setAddSlot]             = useState<number | null>(null);
   const [addName, setAddName]             = useState('');
-  const [addQty, setAddQty]               = useState(30);
+  const [addQty, setAddQty]               = useState(8);
   const [addDevicePicker, setAddDevicePicker] = useState(false);
   const [addSlotPicker, setAddSlotPicker]     = useState(false);
 
@@ -240,15 +255,14 @@ export default function MedicinesScreen({
   };
 
   const handleDelete = (med: Medicine) => {
-    Alert.alert(
-      'Delete Medicine',
-      `Remove "${med.name}" from Cartridge ${med.cartridgeSlot}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive',
-          onPress: () => onMedicinesChange(medicines.filter(m => m.id !== med.id)) },
-      ]
-    );
+    setDeleteTarget(med);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    onMedicinesChange(medicines.filter(m => m.id !== deleteTarget.id));
+    onSchedulesChange(schedules.filter(s => s.medicineId !== deleteTarget.id));
+    setDeleteTarget(null);
   };
 
   return (
@@ -509,6 +523,51 @@ export default function MedicinesScreen({
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── DELETE CONFIRMATION MODAL ───────────────────────────────────── */}
+      <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
+        <View style={s.overlay}>
+          <View style={s.modalCard}>
+            <View style={s.deleteIconBox}>
+              <Text style={s.deleteIconEmoji}>🗑</Text>
+            </View>
+
+            <Text style={s.deleteTitleCenter}>Delete Medicine?</Text>
+            <Text style={s.deleteMessage}>
+              This will permanently remove{' '}
+              <Text style={s.deleteHighlight}>{deleteTarget?.name}</Text>
+              {deleteTarget ? ` from Cartridge ${deleteTarget.cartridgeSlot}` : ''}.
+            </Text>
+
+            {deleteTarget && (() => {
+              const linkedScheds = schedules.filter(s => s.medicineId === deleteTarget.id);
+              if (linkedScheds.length === 0) return null;
+              return (
+                <View style={s.deleteWarningBox}>
+                  <Text style={s.deleteWarningIcon}>⚠️</Text>
+                  <View>
+                    <Text style={s.deleteWarningTitle}>This will also delete:</Text>
+                    <Text style={s.deleteWarningItem}>
+                      • {linkedScheds.length} schedule{linkedScheds.length !== 1 ? 's' : ''} using this medicine
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            <Text style={s.deleteUndoneText}>This action cannot be undone.</Text>
+
+            <View style={s.modalActions}>
+              <TouchableOpacity style={s.cancelBtn} activeOpacity={0.7} onPress={() => setDeleteTarget(null)}>
+                <Text style={s.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.deleteConfirmBtn} activeOpacity={0.7} onPress={confirmDelete}>
+                <Text style={s.deleteConfirmText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -637,6 +696,12 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
+  stepperHint: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginTop: 5,
+    marginLeft: 2,
+  },
 
   // Modal actions
   modalActions:   { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 4 },
@@ -650,4 +715,18 @@ const s = StyleSheet.create({
   conflictIcon:      { fontSize: 15, marginRight: 8, marginTop: 1 },
   conflictText:      { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
   conflictHighlight: { fontWeight: '700', color: '#78350F' },
+
+  // ── Delete modal ──────────────────────────────────────────────────────────
+  deleteIconBox:    { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 16 },
+  deleteIconEmoji:  { fontSize: 28 },
+  deleteTitleCenter:{ fontSize: 19, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 10 },
+  deleteMessage:    { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21, marginBottom: 14 },
+  deleteHighlight:  { color: '#111827', fontWeight: '700' },
+  deleteWarningBox: { flexDirection: 'row', backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 12, marginBottom: 12, alignItems: 'flex-start', gap: 8 },
+  deleteWarningIcon:{ fontSize: 15, marginTop: 1 },
+  deleteWarningTitle:{ fontSize: 13, fontWeight: '700', color: '#92400E', marginBottom: 3 },
+  deleteWarningItem: { fontSize: 13, color: '#92400E', lineHeight: 19 },
+  deleteUndoneText: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginBottom: 20, fontStyle: 'italic' },
+  deleteConfirmBtn: { flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: 'center', backgroundColor: '#DC2626' },
+  deleteConfirmText:{ fontSize: 14, fontWeight: '600', color: '#FFF' },
 });

@@ -7,8 +7,8 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert,
 } from 'react-native';
+import { Schedule } from '../services/storage';
 
 interface Device {
   id: string;
@@ -20,13 +20,33 @@ interface Device {
   lastSync: string;
 }
 
+interface Medicine {
+  id: string;
+  deviceId: string;
+  cartridgeSlot: number;
+  name: string;
+  quantity: number;
+}
+
 interface DevicesScreenProps {
   devices: Device[];
+  medicines: Medicine[];
+  schedules: Schedule[];
   onDevicesChange: (devices: Device[]) => void;
+  onMedicinesChange: (medicines: Medicine[]) => void;
+  onSchedulesChange: (schedules: Schedule[]) => void;
   onBack: () => void;
 }
 
-export default function DevicesScreen({ devices, onDevicesChange, onBack }: DevicesScreenProps) {
+export default function DevicesScreen({
+  devices,
+  medicines,
+  schedules,
+  onDevicesChange,
+  onMedicinesChange,
+  onSchedulesChange,
+  onBack,
+}: DevicesScreenProps) {
   const setDevices = onDevicesChange;
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
@@ -36,6 +56,7 @@ export default function DevicesScreen({ devices, onDevicesChange, onBack }: Devi
   const [newCartridgeCount, setNewCartridgeCount] = useState(4);
   const [showAddConfirm, setShowAddConfirm] = useState(false);
   const [renameName, setRenameName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
 
   const handleAddDevice = () => {
     if (!newName.trim() || !newUid.trim()) {
@@ -83,18 +104,23 @@ export default function DevicesScreen({ devices, onDevicesChange, onBack }: Devi
   };
 
   const handleRemove = (device: Device) => {
-    Alert.alert(
-      'Remove Device',
-      `Are you sure you want to remove "${device.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => setDevices(devices.filter(d => d.id !== device.id)),
-        },
-      ]
+    setDeleteTarget(device);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    const device = deleteTarget;
+    const linkedMedicines = medicines.filter(m => m.deviceId === device.id);
+    const linkedMedicineIds = new Set(linkedMedicines.map(m => m.id));
+    const linkedSchedules = schedules.filter(
+      s => s.deviceId === device.id || linkedMedicineIds.has(s.medicineId)
     );
+    onDevicesChange(devices.filter(d => d.id !== device.id));
+    onMedicinesChange(medicines.filter(m => m.deviceId !== device.id));
+    onSchedulesChange(
+      schedules.filter(s => s.deviceId !== device.id && !linkedMedicineIds.has(s.medicineId))
+    );
+    setDeleteTarget(null);
   };
 
   return (
@@ -205,14 +231,14 @@ export default function DevicesScreen({ devices, onDevicesChange, onBack }: Devi
                 <Text style={styles.stepperValueText}>{newCartridgeCount}</Text>
               </View>
               <TouchableOpacity
-                style={[styles.stepperBtn, newCartridgeCount >= 6 && styles.stepperBtnDisabled]}
-                activeOpacity={newCartridgeCount >= 6 ? 1 : 0.7}
-                onPress={() => newCartridgeCount < 6 && setNewCartridgeCount(c => c + 1)}
+                style={[styles.stepperBtn, newCartridgeCount >= 9 && styles.stepperBtnDisabled]}
+                activeOpacity={newCartridgeCount >= 9 ? 1 : 0.7}
+                onPress={() => newCartridgeCount < 9 && setNewCartridgeCount(c => c + 1)}
               >
                 <Text style={[styles.stepperBtnText, newCartridgeCount >= 6 && styles.stepperBtnTextDisabled]}>+</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.stepperHelper}>Select how many medicine cartridges this dispenser has (3–6). This cannot be changed later.</Text>
+            <Text style={styles.stepperHelper}>Select how many medicine cartridges this dispenser has (3–9). This cannot be changed later.</Text>
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} activeOpacity={0.7} onPress={() => { setShowAddModal(false); setNewCartridgeCount(4); }}>
@@ -278,6 +304,69 @@ export default function DevicesScreen({ devices, onDevicesChange, onBack }: Devi
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} activeOpacity={0.7} onPress={confirmRename}>
                 <Text style={styles.modalConfirmText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.deleteIconBox}>
+              <Text style={styles.deleteIconEmoji}>🗑</Text>
+            </View>
+
+            <Text style={styles.modalTitleCenter}>Delete Device?</Text>
+            <Text style={styles.deleteMessage}>
+              This will permanently remove{' '}
+              <Text style={styles.deleteHighlight}>{deleteTarget?.name}</Text>.
+            </Text>
+
+            {deleteTarget && (() => {
+              const linkedMeds = medicines.filter(m => m.deviceId === deleteTarget.id);
+              const linkedMedIds = new Set(linkedMeds.map(m => m.id));
+              const linkedScheds = schedules.filter(
+                s => s.deviceId === deleteTarget.id || linkedMedIds.has(s.medicineId)
+              );
+              if (linkedMeds.length === 0 && linkedScheds.length === 0) return null;
+              return (
+                <View style={styles.deleteWarningBox}>
+                  <Text style={styles.deleteWarningIcon}>⚠️</Text>
+                  <View>
+                    <Text style={styles.deleteWarningTitle}>This will also delete:</Text>
+                    {linkedMeds.length > 0 && (
+                      <Text style={styles.deleteWarningItem}>
+                        • {linkedMeds.length} medicine{linkedMeds.length !== 1 ? 's' : ''}
+                      </Text>
+                    )}
+                    {linkedScheds.length > 0 && (
+                      <Text style={styles.deleteWarningItem}>
+                        • {linkedScheds.length} schedule{linkedScheds.length !== 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })()}
+
+            <Text style={styles.deleteUndoneText}>This action cannot be undone.</Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                activeOpacity={0.7}
+                onPress={() => setDeleteTarget(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteConfirmBtn}
+                activeOpacity={0.7}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.deleteConfirmText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -644,5 +733,75 @@ const styles = StyleSheet.create({
     color: '#92400E',
     lineHeight: 18,
     fontWeight: '500',
+  },
+  // ── Delete modal ─────────────────────────────────────────────────────────
+  deleteIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  deleteIconEmoji: {
+    fontSize: 28,
+  },
+  deleteMessage: {
+    fontSize: 15,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  deleteHighlight: {
+    color: TEXT_DARK,
+    fontWeight: '700',
+  },
+  deleteWarningBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF3C7',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  deleteWarningIcon: {
+    fontSize: 16,
+    marginTop: 1,
+  },
+  deleteWarningTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  deleteWarningItem: {
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 20,
+  },
+  deleteUndoneText: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  deleteConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+  },
+  deleteConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
