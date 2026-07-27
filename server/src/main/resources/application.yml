@@ -1,9 +1,10 @@
 server:
   port: 8080
+  address: 0.0.0.0  # Bind to all network interfaces (allows external connections)
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/neondb?sslmode=require}
     username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
@@ -17,10 +18,13 @@ spring:
       connection-test-query: SELECT 1
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
 
 jwt:
   secret: ${JWT_SECRET:myDefaultSecretKeyForMedicineDispenserApp2024PleaseChangeThisInProduction}

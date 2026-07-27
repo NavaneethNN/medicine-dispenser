@@ -2,9 +2,10 @@ import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, TextInput, Switch, KeyboardAvoidingView,
-  Platform, Alert, Dimensions,
+  Platform, Alert, Dimensions, ActivityIndicator,
 } from 'react-native';
 import { Schedule, WeekDay, RepeatType } from '../services/storage';
+import { scheduleApi, CreateScheduleBody } from '../services/api';
 import { Medicine } from './MedicinesScreen';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ interface ScheduleScreenProps {
   onMedicinesChange: (m: Medicine[]) => void;
   onBack: () => void;
   onViewUpcoming: () => void;
+  onRefresh: () => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -270,8 +272,16 @@ function ScheduleCard({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ScheduleScreen({
-  devices, medicines, schedules, onSchedulesChange, onMedicinesChange, onBack, onViewUpcoming,
+  devices, medicines, schedules, onSchedulesChange, onMedicinesChange, onBack, onViewUpcoming, onRefresh,
 }: ScheduleScreenProps) {
+
+  const [busy, setBusy]   = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const withBusy = async (fn: () => Promise<void>) => {
+    setBusy(true); setApiError(null);
+    try { await fn(); } catch (e: any) { setApiError(e?.message ?? 'Something went wrong'); } finally { setBusy(false); }
+  };
 
   // ── Add modal state ──────────────────────────────────────────────────────
   const [showAdd, setShowAdd]       = useState(false);
@@ -336,15 +346,19 @@ export default function ScheduleScreen({
     if (aRepeat === 'specific_days' && aDays.length === 0) { Alert.alert('Missing days', 'Please select at least one day.'); return; }
     const { blocked, warn } = validateStock(aMedId, aQty);
     if (blocked) { Alert.alert('Not enough stock', warn); return; }
-    const sc: Schedule = {
-      id: Date.now().toString(), deviceId: aDeviceId, medicineId: aMedId,
+    const body: CreateScheduleBody = {
+      deviceId: aDeviceId, medicineId: aMedId,
       time: aTime, repeatType: aRepeat,
       specificDays: aRepeat === 'specific_days' ? aDays : [],
       oneTimeDate: aRepeat === 'one_time' ? aDate : '',
       quantityPerDose: aQty, alarmEnabled: aAlarm,
     };
-    onSchedulesChange([...schedules, sc]);
-    if (warn) setAWarn(warn); else closeAdd();
+    if (warn) setAWarn(warn);
+    withBusy(async () => {
+      await scheduleApi.create(body);
+      closeAdd();
+      await onRefresh();
+    });
   };
   const confirmAddWithWarn = () => { setAWarn(''); closeAdd(); };
 
@@ -362,23 +376,30 @@ export default function ScheduleScreen({
     if (eRepeat === 'specific_days' && eDays.length === 0) { Alert.alert('Missing days', 'Please select at least one day.'); return; }
     const { blocked, warn } = validateStock(eMedId, eQty);
     if (blocked) { Alert.alert('Not enough stock', warn); return; }
-    const updated: Schedule = {
-      ...editTarget, deviceId: eDeviceId, medicineId: eMedId,
+    const body: Partial<CreateScheduleBody> = {
+      deviceId: eDeviceId, medicineId: eMedId,
       time: eTime, repeatType: eRepeat,
       specificDays: eRepeat === 'specific_days' ? eDays : [],
       oneTimeDate: eRepeat === 'one_time' ? eDate : '',
       quantityPerDose: eQty, alarmEnabled: eAlarm,
     };
-    onSchedulesChange(schedules.map(x => x.id === editTarget.id ? updated : x));
-    if (warn) setEWarn(warn); else closeEdit();
+    if (warn) setEWarn(warn);
+    withBusy(async () => {
+      await scheduleApi.update(editTarget.id, body);
+      closeEdit();
+      await onRefresh();
+    });
   };
   const confirmEditWithWarn = () => { setEWarn(''); closeEdit(); };
 
   // ── Delete ───────────────────────────────────────────────────────────────
   const confirmDelete = () => {
     if (!deleteTarget) return;
-    onSchedulesChange(schedules.filter(x => x.id !== deleteTarget.id));
-    setDeleteTarget(null);
+    withBusy(async () => {
+      await scheduleApi.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      await onRefresh();
+    });
   };
 
   // ── Upcoming count for button badge ─────────────────────────────────────
@@ -398,6 +419,22 @@ export default function ScheduleScreen({
           <Text style={s.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Error / Busy ── */}
+      {apiError && (
+        <View style={s.errorBanner}>
+          <Text style={s.errorBannerText} numberOfLines={3}>{apiError}</Text>
+          <TouchableOpacity onPress={() => setApiError(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={s.errorBannerDismiss}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {busy && (
+        <View style={s.busyRow}>
+          <ActivityIndicator color={PRIMARY} size="small" />
+          <Text style={s.busyText}>Saving…</Text>
+        </View>
+      )}
 
       {/* ── Upcoming Schedules Button ── */}
       <TouchableOpacity
@@ -854,6 +891,13 @@ const s = StyleSheet.create({
   stepBtnTextDisabled:{ color: '#9CA3AF' },
   stepInput:         { flex: 1, minWidth: 40, textAlign: 'center', fontSize: 17, fontWeight: '700', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 4 },
   stepperHint:       { fontSize: 12, color: TEXT_MUTED, marginTop: 5, marginLeft: 2 },
+
+  // Error / busy
+  errorBanner:        { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12, marginBottom: 12, gap: 8 },
+  errorBannerText:    { flex: 1, fontSize: 13, color: '#DC2626', fontWeight: '500' },
+  errorBannerDismiss: { fontSize: 14, color: '#DC2626', fontWeight: '700', paddingHorizontal: 4 },
+  busyRow:            { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  busyText:           { fontSize: 13, color: TEXT_MUTED },
 
   // Alarm row
   alarmRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 4, paddingHorizontal: 2 },

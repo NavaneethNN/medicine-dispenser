@@ -1,9 +1,11 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 
 interface DashboardScreenProps {
   userName: string;
   onLogout: () => void;
   onNavigate: (screen: string) => void;
+  dataLoading?: boolean;
+  dataError?: string | null;
 }
 
 const menuItems = [
@@ -13,7 +15,7 @@ const menuItems = [
   { key: 'containers', label: 'Configured', desc: 'Configure medicine containers', icon: 'C' },
 ];
 
-export default function DashboardScreen({ userName, onLogout, onNavigate }: DashboardScreenProps) {
+export default function DashboardScreen({ userName, onLogout, onNavigate, dataLoading, dataError }: DashboardScreenProps) {
   const handleNavigate = (key: string) => {
     onNavigate(key);
   };
@@ -34,6 +36,24 @@ export default function DashboardScreen({ userName, onLogout, onNavigate }: Dash
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Connection Status */}
+      {dataLoading && (
+        <View style={styles.statusBanner}>
+          <ActivityIndicator color="#0D9488" size="small" />
+          <Text style={styles.statusText}>Loading data...</Text>
+        </View>
+      )}
+      
+      {dataError && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.errorTitle}>Connection Error</Text>
+            <Text style={styles.errorText}>{dataError}</Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.menuContainer}>
         {menuItems.map((item) => (
@@ -166,5 +186,42 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#D1D5DB',
     fontWeight: '300',
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  statusText: {
+    fontSize: 13,
+    color: '#0369A1',
+    fontWeight: '500',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  errorIcon: {
+    fontSize: 18,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginBottom: 2,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    lineHeight: 16,
   },
 });
