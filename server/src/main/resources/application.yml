@@ -18,7 +18,7 @@ spring:
       connection-test-query: SELECT 1
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: update  # temporarily allow schema updates
     show-sql: false
     open-in-view: false
     properties:
@@ -29,3 +29,10 @@ spring:
 jwt:
   secret: ${JWT_SECRET:myDefaultSecretKeyForMedicineDispenserApp2024PleaseChangeThisInProduction}
   expiration: 86400000
+
+# ── Blender / Python digital-twin connection ────────────────────────────────────
+dispenser:
+  python:
+    host: ${PYTHON_SOCKET_HOST:127.0.0.1}
+    port: ${PYTHON_SOCKET_PORT:5001}  # Changed from 5000 to avoid conflict with macOS AirPlay
+    timeout-ms: 60000  # 60 seconds to allow slow vending-machine animations (5s/tablet × 8 max tablets)

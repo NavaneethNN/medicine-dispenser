@@ -2,16 +2,18 @@ import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  SafeAreaView,
 } from 'react-native';
 import { medicineApi, scheduleApi } from '../services/api';
 import { Schedule } from '../services/storage';
+import Icon from '../components/Icon';
 
 const PRIMARY    = '#0D9488';
-const BG         = '#F0FDFA';
+const BG         = '#F8FAFC';
 const CARD_BG    = '#FFFFFF';
-const TEXT_DARK  = '#111827';
-const TEXT_MUTED = '#6B7280';
-const BORDER     = '#E5E7EB';
+const TEXT_DARK  = '#0F172A';
+const TEXT_MUTED = '#64748B';
+const BORDER     = '#E2E8F0';
 const MAX_QUANTITY = 8;
 
 const MEDICINE_COLORS = ['#6366F1','#EC4899','#F59E0B','#10B981','#3B82F6','#EF4444','#8B5CF6','#14B8A6'];
@@ -183,11 +185,18 @@ export default function MedicinesScreen({
   });
 
   return (
+    <SafeAreaView style={s.safe}>
     <ScrollView style={s.container} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backBtn}><Text style={s.backText}>‹ Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backBtn}>
+          <Icon name="chevron-back" size={22} color={PRIMARY} />
+          <Text style={s.backText}>Back</Text>
+        </TouchableOpacity>
         <Text style={s.title}>Medicines</Text>
-        <TouchableOpacity onPress={openAdd} activeOpacity={0.7} style={s.addBtn}><Text style={s.addBtnText}>+ Add</Text></TouchableOpacity>
+        <TouchableOpacity onPress={openAdd} activeOpacity={0.7} style={s.addBtn}>
+          <Icon name="add" size={18} color="#fff" />
+          <Text style={s.addBtnText}>Add</Text>
+        </TouchableOpacity>
       </View>
 
       {error && <ErrorBanner msg={error} onDismiss={() => setError(null)} />}
@@ -195,13 +204,13 @@ export default function MedicinesScreen({
 
       {devices.length === 0 ? (
         <View style={s.emptyState}>
-          <View style={s.emptyIconBox}><Text style={s.emptyIcon}>💊</Text></View>
+          <View style={s.emptyIconBox}><Icon name="hardware-chip-outline" size={34} color={PRIMARY} /></View>
           <Text style={s.emptyTitle}>No devices yet</Text>
           <Text style={s.emptyDesc}>Add a device first, then assign medicines to its cartridges.</Text>
         </View>
       ) : medicines.length === 0 ? (
         <View style={s.emptyState}>
-          <View style={s.emptyIconBox}><Text style={s.emptyIcon}>💊</Text></View>
+          <View style={s.emptyIconBox}><Icon name="medkit-outline" size={34} color={PRIMARY} /></View>
           <Text style={s.emptyTitle}>No medicines added</Text>
           <Text style={s.emptyDesc}>Tap "+ Add" to assign a medicine to a cartridge.</Text>
           <TouchableOpacity onPress={openAdd} activeOpacity={0.7} style={s.emptyBtn}><Text style={s.emptyBtnText}>+ Add First Medicine</Text></TouchableOpacity>
@@ -213,7 +222,7 @@ export default function MedicinesScreen({
             return (
               <View key={device.id} style={s.section}>
                 <View style={s.sectionHeader}>
-                  <View style={s.sectionIconBox}><Text style={s.sectionIcon}>D</Text></View>
+                  <View style={s.sectionIconBox}><Icon name="hardware-chip-outline" size={18} color={PRIMARY} /></View>
                   <View style={s.sectionMeta}>
                     <Text style={s.sectionTitle} numberOfLines={1}>{device.name}</Text>
                     <Text style={s.sectionUid}>{device.deviceUid}</Text>
@@ -392,7 +401,7 @@ export default function MedicinesScreen({
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
         <View style={s.overlay}>
           <View style={s.modalCard}>
-            <View style={s.deleteIconBox}><Text style={s.deleteIconEmoji}>🗑</Text></View>
+            <View style={s.deleteIconBox}><Icon name="trash-outline" size={28} color="#DC2626" /></View>
             <Text style={s.deleteTitleCenter}>Delete Medicine?</Text>
             <Text style={s.deleteMessage}>
               Permanently remove <Text style={s.deleteHighlight}>{deleteTarget?.name}</Text>
@@ -403,7 +412,7 @@ export default function MedicinesScreen({
               if (!ls.length) return null;
               return (
                 <View style={s.deleteWarningBox}>
-                  <Text style={s.deleteWarningIcon}>⚠️</Text>
+                  <Icon name="warning-outline" size={15} color="#D97706" />
                   <View>
                     <Text style={s.deleteWarningTitle}>This will also delete:</Text>
                     <Text style={s.deleteWarningItem}>• {ls.length} schedule{ls.length !== 1 ? 's' : ''}</Text>
@@ -425,17 +434,19 @@ export default function MedicinesScreen({
       </Modal>
 
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
+  safe:      { flex: 1, backgroundColor: BG },
   content:   { padding: 16, paddingBottom: 48 },
   header:    { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  backBtn:   { width: 64, paddingVertical: 6 },
-  backText:  { fontSize: 16, color: PRIMARY, fontWeight: '600' },
+  backBtn:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingRight: 8, minWidth: 70 },
+  backText:  { fontSize: 15, color: PRIMARY, fontWeight: '600', marginLeft: 2 },
   title:     { flex: 1, fontSize: 20, fontWeight: '700', color: TEXT_DARK, textAlign: 'center' },
-  addBtn:    { width: 64, alignItems: 'flex-end', backgroundColor: PRIMARY, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  addBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: PRIMARY, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, minWidth: 70, justifyContent: 'center' },
   addBtnText:{ color: '#fff', fontSize: 14, fontWeight: '600' },
   errorBanner:        { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12, marginBottom: 12, gap: 8 },
   errorBannerText:    { flex: 1, fontSize: 13, color: '#DC2626', fontWeight: '500' },
@@ -444,7 +455,6 @@ const s = StyleSheet.create({
   busyText:  { fontSize: 13, color: TEXT_MUTED },
   emptyState:   { alignItems: 'center', paddingVertical: 64 },
   emptyIconBox: { width: 72, height: 72, borderRadius: 36, backgroundColor: PRIMARY + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  emptyIcon:    { fontSize: 32 },
   emptyTitle:   { fontSize: 18, fontWeight: '700', color: TEXT_DARK, marginBottom: 8 },
   emptyDesc:    { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24, marginBottom: 24 },
   emptyBtn:     { backgroundColor: PRIMARY, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
@@ -453,7 +463,6 @@ const s = StyleSheet.create({
   section:      {},
   sectionHeader:{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   sectionIconBox:{ width: 38, height: 38, borderRadius: 10, backgroundColor: PRIMARY + '18', alignItems: 'center', justifyContent: 'center', marginRight: 10, flexShrink: 0 },
-  sectionIcon:  { fontSize: 15, fontWeight: '700', color: PRIMARY },
   sectionMeta:  { flex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: TEXT_DARK },
   sectionUid:   { fontSize: 12, color: TEXT_MUTED, marginTop: 1 },
@@ -509,13 +518,11 @@ const s = StyleSheet.create({
   confirmBtn:     { flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: 'center', backgroundColor: PRIMARY },
   confirmBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
   btnDisabled:    { opacity: 0.65 },
-  deleteIconBox:    { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 16 },
-  deleteIconEmoji:  { fontSize: 28 },
+  deleteIconBox:    { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 14 },
   deleteTitleCenter:{ fontSize: 19, fontWeight: '700', color: TEXT_DARK, textAlign: 'center', marginBottom: 10 },
   deleteMessage:    { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', lineHeight: 21, marginBottom: 14 },
   deleteHighlight:  { color: TEXT_DARK, fontWeight: '700' },
-  deleteWarningBox: { flexDirection: 'row', backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 12, marginBottom: 12, alignItems: 'flex-start', gap: 8 },
-  deleteWarningIcon:{ fontSize: 15, marginTop: 1 },
+  deleteWarningBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 12, marginBottom: 12 },
   deleteWarningTitle:{ fontSize: 13, fontWeight: '700', color: '#92400E', marginBottom: 3 },
   deleteWarningItem: { fontSize: 13, color: '#92400E', lineHeight: 19 },
   deleteUndoneText: { fontSize: 13, color: TEXT_MUTED, textAlign: 'center', marginBottom: 20, fontStyle: 'italic' },

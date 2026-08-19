@@ -7,16 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Medicine {
-  id        String   @id @default(uuid())
-  name      String
-  quantity  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("medicine")
-}
-
+// ── users ─────────────────────────────────────────────────────────────────────
+// Matches JPA entity: User.java  →  @Table(name = "users")
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -25,4 +17,65 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("users")
+}
+
+// ── device ────────────────────────────────────────────────────────────────────
+// Matches JPA entity: Device.java  →  @Table(name = "device")
+model Device {
+  id              String    @id @default(uuid())
+  name            String
+  deviceUid       String    @unique @map("device_uid")
+  cartridgeCount  Int       @default(4) @map("cartridge_count")
+  firmwareVersion String?   @default("v2.1.0") @map("firmware_version")
+  status          String    @default("online")
+  lastSync        String?   @default("Just now") @map("last_sync")
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
+
+  // Note: JPA entity has no user FK — devices are not user-scoped in this branch
+  medicines Medicine[]
+  schedules Schedule[]
+
+  @@map("device")
+}
+
+// ── medicine ──────────────────────────────────────────────────────────────────
+// Matches JPA entity: Medicine.java  →  @Table(name = "medicine")
+// Unique constraint: (device_id, cartridge_slot)
+model Medicine {
+  id                String    @id @default(uuid())
+  name              String
+  quantity          Int       @default(0)
+  cartridgeSlot     Int       @map("cartridge_slot")
+  lowStockThreshold Int       @default(3) @map("low_stock_threshold")
+  deviceId          String    @map("device_id")
+  device            Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime? @default(now()) @map("created_at")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
+
+  schedules Schedule[]
+
+  @@unique([deviceId, cartridgeSlot], name: "uq_medicine_device_slot")
+  @@map("medicine")
+}
+
+// ── schedule ──────────────────────────────────────────────────────────────────
+// Matches JPA entity: Schedule.java  →  @Table(name = "schedule")
+// specificDays stored as comma-separated string e.g. "Mon,Wed,Fri"
+model Schedule {
+  id               String    @id @default(uuid())
+  time             String
+  repeatType       String    @map("repeat_type")
+  specificDaysRaw  String    @default("") @map("specific_days")
+  oneTimeDate      String    @default("") @map("one_time_date")
+  quantityPerDose  Int       @default(1) @map("quantity_per_dose")
+  alarmEnabled     Boolean   @default(true) @map("alarm_enabled")
+  deviceId         String    @map("device_id")
+  device           Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  medicineId       String    @map("medicine_id")
+  medicine         Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  createdAt        DateTime? @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+
+  @@map("schedule")
 }

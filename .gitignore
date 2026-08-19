@@ -29,6 +29,10 @@ prisma/generated/
 *.log
 .DS_Store
 Thumbs.db
+python/logs/
+
+# Keep tablet positions file (important!)
+!python/tablet_positions.json
 
 # IDE
 .idea/
@@ -37,3 +41,6 @@ Thumbs.db
 
 # Testing
 coverage/
+mobile/.env
+server/src/main/resources/application-localdev.properties
+python/__pycache__

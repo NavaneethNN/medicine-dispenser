@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Dimensions,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView,
+  ActivityIndicator, Alert,
 } from 'react-native';
-import { Schedule } from '../services/storage';
+import { ApiSchedule, dispenseApi } from '../services/api';
 import { Medicine } from './MedicinesScreen';
+import Icon from '../components/Icon';
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 const PRIMARY    = '#0D9488';
-const BG         = '#F0FDFA';
+const BG         = '#F8FAFC';
 const CARD_BG    = '#FFFFFF';
-const TEXT_DARK  = '#111827';
-const TEXT_MUTED = '#6B7280';
-const BORDER     = '#E5E7EB';
-const { width: SCREEN_W } = Dimensions.get('window');
+const TEXT_DARK  = '#0F172A';
+const TEXT_MUTED = '#64748B';
+const BORDER     = '#E2E8F0';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface Device {
@@ -26,7 +26,7 @@ interface Device {
 export interface UpcomingSchedulesScreenProps {
   devices: Device[];
   medicines: Medicine[];
-  schedules: Schedule[];
+  schedules: ApiSchedule[];
   onBack: () => void;
 }
 
@@ -60,7 +60,7 @@ function fmt24to12(t: string): string {
 }
 
 /** Does schedule fire on date d? */
-function firesOn(sc: Schedule, iso: string, dayOfWeek: WeekDay): boolean {
+function firesOn(sc: ApiSchedule, iso: string, dayOfWeek: WeekDay): boolean {
   if (sc.repeatType === 'daily') return true;
   if (sc.repeatType === 'specific_days') return sc.specificDays.includes(dayOfWeek as any);
   if (sc.repeatType === 'one_time') return sc.oneTimeDate === iso;
@@ -88,62 +88,109 @@ interface DayEntry {
   iso: string;
   label: string;
   items: {
-    schedule: Schedule;
+    schedule: ApiSchedule;
     medicine: Medicine | undefined;
     device: Device | undefined;
     fireTime: Date;
     status: 'upcoming' | 'missed' | 'dispensed';
     available: boolean;
+    /** How many tablets will remain AFTER this dose fires */
+    stockAfter: number;
   }[];
 }
 
+/**
+ * Build upcoming occurrences limited by stock, not by days.
+ *
+ * For each schedule we calculate how many doses the current stock covers:
+ *   maxDoses = floor(medicine.quantity / schedule.quantityPerDose)
+ *
+ * We then walk forward day-by-day and emit one occurrence each time the
+ * schedule fires — stopping as soon as we've emitted maxDoses occurrences
+ * for that schedule.  The look-ahead cap (MAX_LOOKAHEAD_DAYS) prevents an
+ * infinite loop for daily schedules with a large stock count.
+ */
+const MAX_LOOKAHEAD_DAYS = 365; // safety cap — 1 year should always be enough
+
 function buildDays(
-  schedules: Schedule[],
+  schedules: ApiSchedule[],
   medicines: Medicine[],
   devices: Device[],
-  daysAhead: number,
 ): DayEntry[] {
-  const now = new Date();
+  const now       = new Date();
   const todayBase = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayIso = localISODate(todayBase);
+  const todayIso  = localISODate(todayBase);
   const tomorrowBase = new Date(todayBase.getTime() + 86_400_000);
-  const tomorrowIso = localISODate(tomorrowBase);
+  const tomorrowIso  = localISODate(tomorrowBase);
 
-  const days: DayEntry[] = [];
-
-  for (let i = 0; i < daysAhead; i++) {
-    const base = new Date(todayBase.getTime() + i * 86_400_000);
-    const iso = localISODate(base);
-    const dow = WEEK_NAMES[base.getDay()];
-    const label = dayLabel(iso, todayIso, tomorrowIso);
-
-    const items: DayEntry['items'] = [];
-
-    for (const sc of schedules) {
-      if (!firesOn(sc, iso, dow)) continue;
-      const med = medicines.find(m => m.id === sc.medicineId);
-      const dev = devices.find(d => d.id === sc.deviceId);
-      const [h, m] = sc.time.split(':').map(Number);
-      const fireTime = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0, 0);
-
-      let status: 'upcoming' | 'missed' | 'dispensed' = 'upcoming';
-      if (fireTime < now) status = 'missed';
-
-      const available = !!med && med.quantity >= sc.quantityPerDose;
-
-      items.push({ schedule: sc, medicine: med, device: dev, fireTime, status, available });
-    }
-
-    // Sort by time
-    items.sort((a, b) => toMins(a.schedule.time) - toMins(b.schedule.time));
-
-    // Only include days that have at least one schedule
-    if (items.length > 0) {
-      days.push({ iso, label, items });
+  // Per-schedule dose budgets (how many future occurrences are still funded by stock)
+  const budgets = new Map<string, number>();
+  for (const sc of schedules) {
+    const med = medicines.find(m => m.id === sc.medicineId);
+    if (!med || !sc.quantityPerDose || sc.quantityPerDose <= 0) {
+      budgets.set(sc.id, 0);
+    } else {
+      budgets.set(sc.id, Math.floor(med.quantity / sc.quantityPerDose));
     }
   }
 
-  return days;
+  // Accumulate occurrences into a map keyed by ISO date
+  const dayMap = new Map<string, DayEntry>();
+
+  for (let i = 0; i < MAX_LOOKAHEAD_DAYS; i++) {
+    // Stop early if every schedule has exhausted its budget
+    if ([...budgets.values()].every(b => b === 0)) break;
+
+    const base = new Date(todayBase.getTime() + i * 86_400_000);
+    const iso  = localISODate(base);
+    const dow  = WEEK_NAMES[base.getDay()];
+
+    for (const sc of schedules) {
+      const remaining = budgets.get(sc.id) ?? 0;
+      if (remaining === 0) continue;
+      if (!firesOn(sc, iso, dow)) continue;
+
+      const med = medicines.find(m => m.id === sc.medicineId);
+      const dev = devices.find(d => d.id === sc.deviceId);
+
+      const [h, m] = (sc.time ?? '00:00').split(':').map(Number);
+      const fireTime = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0, 0);
+
+      const status: 'upcoming' | 'missed' = fireTime < now ? 'missed' : 'upcoming';
+      const available = !!med && med.quantity >= sc.quantityPerDose;
+
+      // Decrement budget for this schedule
+      const newBudget = remaining - 1;
+      budgets.set(sc.id, newBudget);
+
+      // stockAfter = how many tablets remain after ALL doses up to and including this one
+      // We track this as (quantity - dosesConsumed * perDose)
+      const totalDoses = Math.floor((med?.quantity ?? 0) / sc.quantityPerDose);
+      const dosesConsumed = totalDoses - newBudget;
+      const stockAfter = (med?.quantity ?? 0) - dosesConsumed * sc.quantityPerDose;
+
+      if (!dayMap.has(iso)) {
+        dayMap.set(iso, {
+          iso,
+          label: dayLabel(iso, todayIso, tomorrowIso),
+          items: [],
+        });
+      }
+
+      dayMap.get(iso)!.items.push({
+        schedule: sc, medicine: med, device: dev,
+        fireTime, status, available, stockAfter,
+      });
+    }
+  }
+
+  // Sort days chronologically, sort items within each day by time
+  return [...dayMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, day]) => ({
+      ...day,
+      items: day.items.sort((a, b) => toMins(a.schedule.time ?? '00:00') - toMins(b.schedule.time ?? '00:00')),
+    }));
 }
 
 // ─── Item Row ───────────────────────────────────────────────────────────────────
@@ -154,9 +201,32 @@ function ScheduleRow({
   isToday: boolean;
   now: Date;
 }) {
-  const isNext = isToday && item.status === 'upcoming';
-  const isMissed = item.status === 'missed';
+  const [dispensing, setDispensing] = useState(false);
+  const [dispensed, setDispensed]   = useState(false);
+
+  const isNext       = isToday && item.status === 'upcoming';
+  const isMissed     = item.status === 'missed';
   const isUnavailable = !item.available;
+  const isLastDose   = item.stockAfter < item.schedule.quantityPerDose;
+
+  const handleDispenseNow = async () => {
+    if (dispensing || dispensed) return;
+    setDispensing(true);
+    try {
+      const res = await dispenseApi.bySchedule(item.schedule.id);
+      if (res.status === 'success') {
+        setDispensed(true);
+        // Reset the "Dispensed" label after 4 s so the button can be used again
+        setTimeout(() => setDispensed(false), 4000);
+      } else {
+        Alert.alert('Dispense failed', res.message ?? 'Unknown error');
+      }
+    } catch (e: any) {
+      Alert.alert('Dispense failed', e.message ?? 'Could not reach server');
+    } finally {
+      setDispensing(false);
+    }
+  };
 
   return (
     <View style={[
@@ -173,7 +243,7 @@ function ScheduleRow({
       {/* Time column */}
       <View style={r.timeCol}>
         <Text style={[r.time, isMissed && r.timeMissed]}>
-          {fmt24to12(item.schedule.time)}
+          {fmt24to12(item.schedule.time ?? '00:00')}
         </Text>
         {isNext && (
           <Text style={r.countdown}>{countdown(item.fireTime)}</Text>
@@ -190,10 +260,47 @@ function ScheduleRow({
           {' · '}
           {item.device?.name ?? '—'}
         </Text>
+        {/* Stock-after indicator */}
+        {!isMissed && (
+          <View style={r.stockAfterRow}>
+            {isLastDose && <Icon name="warning-outline" size={12} color="#DC2626" />}
+            <Text style={[r.stockAfterTxt, isLastDose && r.stockAfterLast]}>
+              {isLastDose
+                ? 'Last dose — refill needed'
+                : `${item.stockAfter} tablet${item.stockAfter !== 1 ? 's' : ''} remaining after`}
+            </Text>
+          </View>
+        )}
         {isUnavailable && (
-          <Text style={r.unavailableHint}>
-            ⚠ Insufficient stock ({item.medicine?.quantity ?? 0} left)
-          </Text>
+          <View style={r.stockAfterRow}>
+            <Icon name="warning-outline" size={12} color="#D97706" />
+            <Text style={r.unavailableHint}>
+              Insufficient stock ({item.medicine?.quantity ?? 0} left)
+            </Text>
+          </View>
+        )}
+
+        {/* Dispense Now button — shown for any dose that has stock, missed or upcoming */}
+        {item.available && (
+          <TouchableOpacity
+            style={[r.dispenseBtn, dispensed && r.dispenseBtnDone, dispensing && r.dispenseBtnBusy]}
+            onPress={handleDispenseNow}
+            activeOpacity={0.75}
+            disabled={dispensing || dispensed}
+          >
+            {dispensing ? (
+              <ActivityIndicator size={12} color="#fff" />
+            ) : (
+              <Icon
+                name={dispensed ? 'checkmark-circle-outline' : 'play-circle-outline'}
+                size={13}
+                color="#fff"
+              />
+            )}
+            <Text style={r.dispenseBtnTxt}>
+              {dispensed ? 'Dispensed' : dispensing ? 'Dispensing…' : 'Dispense Now'}
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -273,8 +380,6 @@ function DaySection({ day, now }: { day: DayEntry; now: Date }) {
 }
 
 // ─── Main Screen ────────────────────────────────────────────────────────────────
-const DAYS_AHEAD = 14; // show 2 weeks
-
 export default function UpcomingSchedulesScreen({
   devices, medicines, schedules, onBack,
 }: UpcomingSchedulesScreenProps) {
@@ -286,26 +391,31 @@ export default function UpcomingSchedulesScreen({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  const days = buildDays(schedules, medicines, devices, DAYS_AHEAD);
+  const days = buildDays(schedules, medicines, devices);
 
-  // Summary stats
-  const totalToday = days[0]?.label === 'Today' ? days[0].items.length : 0;
-  const upcomingToday = days[0]?.label === 'Today'
-    ? days[0].items.filter(i => i.status === 'upcoming').length
-    : 0;
+  // Total schedule occurrences across all days
+  const totalOccurrences = days.reduce((s, d) => s + d.items.length, 0);
+
+  // Summary stats for today
+  const todayDay     = days.find(d => d.label === 'Today');
+  const totalToday   = todayDay?.items.length ?? 0;
+  const upcomingToday = todayDay?.items.filter(i => i.status === 'upcoming').length ?? 0;
+  const lowStockCount = days.reduce((s, d) => s + d.items.filter(i => !i.available).length, 0);
 
   return (
-    <View style={sc.root}>
+    <SafeAreaView style={sc.safe}>
       {/* Header */}
       <View style={sc.header}>
         <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={sc.backBtn}>
-          <Text style={sc.backText}>‹ Back</Text>
+          <Icon name="chevron-back" size={22} color={PRIMARY} />
+          <Text style={sc.backText}>Back</Text>
         </TouchableOpacity>
         <View style={sc.titleArea}>
           <Text style={sc.title}>Upcoming Schedules</Text>
-          <Text style={sc.subtitle}>Next {DAYS_AHEAD} days</Text>
+          <Text style={sc.subtitle}>
+            {totalOccurrences > 0 ? `${totalOccurrences} dose${totalOccurrences !== 1 ? 's' : ''} until refill` : 'Based on current stock'}
+          </Text>
         </View>
-        {/* Spacer to balance back button */}
         <View style={sc.headerSpacer} />
       </View>
 
@@ -323,9 +433,7 @@ export default function UpcomingSchedulesScreen({
           </View>
           <View style={sc.summaryDivider} />
           <View style={sc.summaryItem}>
-            <Text style={[sc.summaryValue, { color: '#D97706' }]}>
-              {days.reduce((s, d) => s + d.items.filter(i => !i.available).length, 0)}
-            </Text>
+            <Text style={[sc.summaryValue, { color: '#D97706' }]}>{lowStockCount}</Text>
             <Text style={sc.summaryLabel}>Low Stock</Text>
           </View>
         </View>
@@ -334,7 +442,9 @@ export default function UpcomingSchedulesScreen({
       {/* Content */}
       {days.length === 0 ? (
         <View style={sc.empty}>
-          <Text style={sc.emptyIcon}>📅</Text>
+          <View style={sc.emptyIconBox}>
+            <Icon name="calendar-outline" size={36} color={PRIMARY} />
+          </View>
           <Text style={sc.emptyTitle}>No upcoming schedules</Text>
           <Text style={sc.emptyDesc}>
             Create schedules on the Schedule page and they'll appear here.
@@ -352,7 +462,7 @@ export default function UpcomingSchedulesScreen({
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -360,23 +470,23 @@ export default function UpcomingSchedulesScreen({
 
 // Screen
 const sc = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: BG },
+  safe:          { flex: 1, backgroundColor: BG },
   header:        {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 52,
+    paddingTop: 12,
     paddingBottom: 14,
     backgroundColor: CARD_BG,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
-  backBtn:       { paddingVertical: 6, paddingRight: 8, minWidth: 56 },
-  backText:      { fontSize: 16, color: PRIMARY, fontWeight: '600' },
+  backBtn:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, minWidth: 64 },
+  backText:      { fontSize: 15, color: PRIMARY, fontWeight: '600', marginLeft: 2 },
   titleArea:     { flex: 1, alignItems: 'center' },
   title:         { fontSize: 18, fontWeight: '700', color: TEXT_DARK },
   subtitle:      { fontSize: 12, color: TEXT_MUTED, marginTop: 1 },
-  headerSpacer:  { minWidth: 56 },
+  headerSpacer:  { minWidth: 64 },
 
   summaryBar:    {
     flexDirection: 'row',
@@ -398,7 +508,7 @@ const sc = StyleSheet.create({
   summaryDivider:{ width: 1, backgroundColor: BORDER, marginVertical: 4 },
 
   empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyIcon:     { fontSize: 48, marginBottom: 16 },
+  emptyIconBox:  { width: 72, height: 72, borderRadius: 36, backgroundColor: PRIMARY + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle:    { fontSize: 18, fontWeight: '700', color: TEXT_DARK, marginBottom: 8 },
   emptyDesc:     { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', lineHeight: 21 },
 
@@ -470,7 +580,10 @@ const r = StyleSheet.create({
   medName:         { fontSize: 14, fontWeight: '600', color: TEXT_DARK, marginBottom: 2 },
   medNameMissed:   { color: '#9CA3AF' },
   doseInfo:        { fontSize: 12, color: TEXT_MUTED },
-  unavailableHint: { fontSize: 11, color: '#D97706', fontWeight: '600', marginTop: 3 },
+  unavailableHint: { fontSize: 11, color: '#D97706', fontWeight: '600', marginTop: 2 },
+  stockAfterRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  stockAfterTxt:  { fontSize: 11, color: TEXT_MUTED },
+  stockAfterLast: { color: '#DC2626', fontWeight: '600' },
 
   badge:              { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, flexShrink: 0 },
   badgeUpcoming:      { backgroundColor: '#D1FAE5' },
@@ -482,4 +595,19 @@ const r = StyleSheet.create({
   badgeTextMissed:    { color: '#DC2626' },
   badgeTextUnavailable:{ color: '#D97706' },
   badgeTextNext:      { color: '#FFF' },
+
+  dispenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: PRIMARY,
+  },
+  dispenseBtnBusy: { backgroundColor: '#5EAAA3' },
+  dispenseBtnDone: { backgroundColor: '#059669' },
+  dispenseBtnTxt:  { fontSize: 12, fontWeight: '700', color: '#fff' },
 });

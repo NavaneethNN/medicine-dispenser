@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, ActivityIndicator, Alert,
+  Modal, TextInput, ActivityIndicator, Alert, SafeAreaView,
 } from 'react-native';
 import { deviceApi, medicineApi, scheduleApi, ApiDevice } from '../services/api';
 import { Schedule } from '../services/storage';
+import Icon from '../components/Icon';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Device = ApiDevice;
@@ -30,11 +31,11 @@ interface DevicesScreenProps {
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const PRIMARY    = '#0D9488';
-const BG         = '#F0FDFA';
+const BG         = '#F8FAFC';
 const CARD_BG    = '#FFFFFF';
-const TEXT_DARK  = '#111827';
-const TEXT_MUTED = '#6B7280';
-const BORDER     = '#E5E7EB';
+const TEXT_DARK  = '#0F172A';
+const TEXT_MUTED = '#64748B';
+const BORDER     = '#E2E8F0';
 
 // ─── Error Banner ─────────────────────────────────────────────────────────────
 function ErrorBanner({ msg, onDismiss }: { msg: string; onDismiss: () => void }) {
@@ -127,16 +128,19 @@ export default function DevicesScreen({
   });
 
   return (
+    <SafeAreaView style={styles.safe}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.backBtn}>
-          <Text style={styles.backText}>‹ Back</Text>
+          <Icon name="chevron-back" size={22} color={PRIMARY} />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Devices</Text>
         <TouchableOpacity onPress={() => setShowAddModal(true)} activeOpacity={0.7} style={styles.addBtn}>
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Icon name="add" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -170,7 +174,7 @@ export default function DevicesScreen({
                 <View style={styles.deviceCardHeader}>
                   <View style={styles.deviceCardLeft}>
                     <View style={styles.deviceIconBox}>
-                      <Text style={styles.deviceIcon}>D</Text>
+                      <Icon name="hardware-chip-outline" size={20} color={PRIMARY} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.deviceName} numberOfLines={1}>{device.name}</Text>
@@ -269,14 +273,16 @@ export default function DevicesScreen({
         onRequestClose={() => setShowAddConfirm(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <View style={styles.confirmIconBox}><Text style={styles.confirmIcon}>✓</Text></View>
+            <View style={styles.confirmIconBox}>
+              <Icon name="checkmark-circle" size={32} color={PRIMARY} />
+            </View>
             <Text style={styles.modalTitleCenter}>Confirm Device Setup</Text>
             <Text style={styles.confirmMessage}>
               You're about to add a device with{' '}
               <Text style={styles.confirmHighlight}>{newCartridgeCount} medicine cartridges</Text>.
             </Text>
             <View style={styles.confirmWarningBox}>
-              <Text style={styles.confirmWarningIcon}>⚠️</Text>
+              <Icon name="warning-outline" size={16} color="#D97706" />
               <Text style={styles.confirmWarningText}>The number of cartridges cannot be changed after creation.</Text>
             </View>
             <View style={styles.modalActions}>
@@ -324,7 +330,9 @@ export default function DevicesScreen({
         onRequestClose={() => setDeleteTarget(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <View style={styles.deleteIconBox}><Text style={styles.deleteIconEmoji}>🗑</Text></View>
+            <View style={styles.deleteIconBox}>
+              <Icon name="trash-outline" size={28} color="#DC2626" />
+            </View>
             <Text style={styles.modalTitleCenter}>Delete Device?</Text>
             <Text style={styles.deleteMessage}>
               This will permanently remove{' '}
@@ -337,7 +345,7 @@ export default function DevicesScreen({
               if (!lm.length && !ls.length) return null;
               return (
                 <View style={styles.deleteWarningBox}>
-                  <Text style={styles.deleteWarningIcon}>⚠️</Text>
+                  <Icon name="warning-outline" size={15} color="#D97706" />
                   <View>
                     <Text style={styles.deleteWarningTitle}>This will also delete:</Text>
                     {lm.length > 0 && <Text style={styles.deleteWarningItem}>• {lm.length} medicine{lm.length !== 1 ? 's' : ''}</Text>}
@@ -363,18 +371,20 @@ export default function DevicesScreen({
       </Modal>
 
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: BG },
+  safe:        { flex: 1, backgroundColor: BG },
   content:     { padding: 20, paddingBottom: 40 },
-  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  backBtn:     { paddingVertical: 6, minWidth: 64 },
-  backText:    { fontSize: 16, color: PRIMARY, fontWeight: '600' },
-  title:       { fontSize: 20, fontWeight: '700', color: TEXT_DARK, flex: 1, textAlign: 'center' },
-  addBtn:      { backgroundColor: PRIMARY, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, minWidth: 64, alignItems: 'center', justifyContent: 'center' },
+  header:      { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  backBtn:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingRight: 8, minWidth: 70 },
+  backText:    { fontSize: 15, color: PRIMARY, fontWeight: '600', marginLeft: 2 },
+  title:       { flex: 1, fontSize: 20, fontWeight: '700', color: TEXT_DARK, textAlign: 'center' },
+  addBtn:      { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: PRIMARY, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, minWidth: 70, justifyContent: 'center' },
   addBtnText:  { color: '#fff', fontSize: 14, fontWeight: '600' },
 
   errorBanner:        { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12, marginBottom: 12, gap: 8 },
@@ -393,7 +403,6 @@ const styles = StyleSheet.create({
   deviceCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   deviceCardLeft:   { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
   deviceIconBox:    { width: 44, height: 44, borderRadius: 12, backgroundColor: PRIMARY + '15', alignItems: 'center', justifyContent: 'center', marginRight: 14, flexShrink: 0 },
-  deviceIcon:       { fontSize: 18, fontWeight: '700', color: PRIMARY },
   deviceName:       { fontSize: 16, fontWeight: '600', color: TEXT_DARK },
   deviceUid:        { fontSize: 13, color: TEXT_MUTED, marginTop: 2 },
   statusBadge:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, flexShrink: 0 },
@@ -439,19 +448,15 @@ const styles = StyleSheet.create({
   stepperHelper:        { fontSize: 12, color: TEXT_MUTED, marginBottom: 14, lineHeight: 17 },
 
   confirmIconBox:     { width: 60, height: 60, borderRadius: 30, backgroundColor: PRIMARY + '20', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 14 },
-  confirmIcon:        { fontSize: 28, color: PRIMARY, fontWeight: '700' },
   confirmMessage:     { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', lineHeight: 21, marginBottom: 14 },
   confirmHighlight:   { color: PRIMARY, fontWeight: '700' },
-  confirmWarningBox:  { flexDirection: 'row', backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 12, marginBottom: 18, alignItems: 'flex-start' },
-  confirmWarningIcon: { fontSize: 16, marginRight: 8, marginTop: 1 },
+  confirmWarningBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 12, marginBottom: 18 },
   confirmWarningText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 17, fontWeight: '500' },
 
   deleteIconBox:     { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 14 },
-  deleteIconEmoji:   { fontSize: 26 },
   deleteMessage:     { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', lineHeight: 21, marginBottom: 12 },
   deleteHighlight:   { color: TEXT_DARK, fontWeight: '700' },
-  deleteWarningBox:  { flexDirection: 'row', backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 11, marginBottom: 10, alignItems: 'flex-start', gap: 7 },
-  deleteWarningIcon: { fontSize: 14, marginTop: 1 },
+  deleteWarningBox:  { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FEF3C7', borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderRadius: 10, padding: 11, marginBottom: 10 },
   deleteWarningTitle:{ fontSize: 12, fontWeight: '700', color: '#92400E', marginBottom: 3 },
   deleteWarningItem: { fontSize: 12, color: '#92400E', lineHeight: 18 },
   deleteUndoneText:  { fontSize: 12, color: TEXT_MUTED, textAlign: 'center', marginBottom: 16, fontStyle: 'italic' },

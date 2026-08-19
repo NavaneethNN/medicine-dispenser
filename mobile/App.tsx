@@ -1,8 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState, useEffect, useCallback } from 'react';
-import {
-  ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-} from 'react-native';
+import { View, StyleSheet, SafeAreaView } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -11,8 +9,10 @@ import ContainersScreen from './src/screens/ContainersScreen';
 import MedicinesScreen, { Medicine } from './src/screens/MedicinesScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import UpcomingSchedulesScreen from './src/screens/UpcomingSchedulesScreen';
+import ManualDispenseScreen from './src/screens/ManualDispenseScreen';
+import Preloader from './src/components/Preloader';
 import { AuthUser, getSession, clearSession } from './src/services/auth';
-import { deviceApi, medicineApi, scheduleApi, ApiDevice, ApiSchedule } from './src/services/api';
+import { deviceApi, medicineApi, scheduleApi, ApiDevice, ApiSchedule, AuthError } from './src/services/api';
 
 // Re-export the API types under the names the screens already use
 export type Device   = ApiDevice;
@@ -21,7 +21,8 @@ export type Schedule = ApiSchedule;
 type Screen =
   | 'login' | 'register' | 'home'
   | 'devices' | 'containers' | 'medicines'
-  | 'schedules' | 'upcoming_schedules';
+  | 'schedules' | 'upcoming_schedules'
+  | 'manual_dispense';
 
 export default function App() {
   const [screen, setScreen]         = useState<Screen>('login');
@@ -32,8 +33,11 @@ export default function App() {
   const [medicines, setMedicines]   = useState<Medicine[]>([]);
   const [schedules, setSchedules]   = useState<Schedule[]>([]);
 
+  // Preloader state
+  const [bootDone, setBootDone]     = useState(false);  // signals Preloader to fade out
+  const [showLoader, setShowLoader] = useState(true);   // unmounts Preloader after fade
+
   // Boot loading vs screen-level operation loading
-  const [booting, setBooting]       = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError]   = useState<string | null>(null);
 
@@ -44,7 +48,8 @@ export default function App() {
         setUser(saved);
         setScreen('home');
       }
-      setBooting(false);
+      // Signal preloader to begin fade-out (minimum 1.2 s so bar looks smooth)
+      setTimeout(() => setBootDone(true), 1200);
     });
   }, []);
 
@@ -62,6 +67,14 @@ export default function App() {
       setMedicines(meds as unknown as Medicine[]);
       setSchedules(scheds);
     } catch (e: any) {
+      // 401/403 means the stored token is missing or expired — force re-login
+      if (e instanceof AuthError) {
+        await clearSession();
+        setUser(null);
+        setScreen('login');
+        setDataError('Your session has expired. Please log in again.');
+        return;
+      }
       setDataError(e?.message ?? 'Failed to load data. Is the server running?');
     } finally {
       setDataLoading(false);
@@ -103,16 +116,10 @@ export default function App() {
   }, []);
 
   // ── Boot splash ───────────────────────────────────────────────────────────
-  if (booting) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0D9488" />
-      </View>
-    );
-  }
-
   return (
-    <>
+    <SafeAreaView style={[styles.root, { backgroundColor: '#F8FAFC' }]}>
+      <StatusBar style="dark" />
+      
       {screen === 'login' && (
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
@@ -153,6 +160,8 @@ export default function App() {
       {screen === 'containers' && (
         <ContainersScreen
           devices={devices}
+          medicines={medicines}
+          schedules={schedules}
           onBack={() => setScreen('home')}
         />
       )}
@@ -191,11 +200,26 @@ export default function App() {
         />
       )}
 
-      <StatusBar style="dark" />
-    </>
+      {screen === 'manual_dispense' && (
+        <ManualDispenseScreen
+          medicines={medicines}
+          devices={devices}
+          onBack={() => setScreen('home')}
+        />
+      )}
+
+      {/* Preloader overlay — sits on top, fades away after boot */}
+      {showLoader && (
+        <Preloader
+          done={bootDone}
+          onFinished={() => setShowLoader(false)}
+          duration={1400}
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0FDFA' },
+  root: { flex: 1, backgroundColor: '#F8FAFC' },
 });

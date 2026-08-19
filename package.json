@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n server,mobile -c blue,green \"npm:dev:server\" \"npm:dev:mobile\"",
-    "dev:server": "cd server && dotenv -e ../.env -- mvn spring-boot:run",
-    "dev:mobile": "cd mobile && npx expo start",
+    "dev": "sh start.sh",
+    "dev:server": "sh -c 'export $(grep -v \"^#\" .env | xargs) && cd server && mvn spring-boot:run'",
+    "dev:mobile": "cd mobile && npx expo start --lan",
+    "dev:both": "concurrently -n backend,mobile -c blue,green \"npm run dev:server\" \"npm run dev:mobile\"",
     "postinstall": "concurrently -n mobile,server -c green,blue \"npm --prefix mobile install\" \"cd server && mvn dependency:resolve -q\""
   },
   "devDependencies": {

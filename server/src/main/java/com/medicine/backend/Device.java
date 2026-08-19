@@ -21,6 +21,9 @@ public class Device {
     @Column(nullable = false)
     private String name;
 
+    @Column(name = "user_id")  // Nullable for now to handle legacy data
+    private String userId;
+
     @NotBlank(message = "Device UID is required")
     @Column(name = "device_uid", nullable = false, unique = true)
     private String deviceUid;
@@ -59,6 +62,9 @@ public class Device {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 
     public String getDeviceUid() { return deviceUid; }
     public void setDeviceUid(String deviceUid) { this.deviceUid = deviceUid; }

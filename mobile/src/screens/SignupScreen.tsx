@@ -1,65 +1,38 @@
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { registerUser, AuthUser } from '../services/auth';
+import Icon from '../components/Icon';
 
 interface SignupScreenProps {
   onRegisterSuccess: (user: AuthUser) => void;
   onNavigateToLogin: () => void;
 }
 
-export default function SignupScreen({
-  onRegisterSuccess,
-  onNavigateToLogin,
-}: SignupScreenProps) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const PRIMARY = '#0D9488';
 
-  const validate = () => {
-    if (!name.trim()) {
-      setError('Please enter your full name');
-      return false;
-    }
-    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email address');
-      return false;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return false;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return false;
-    }
-    return true;
-  };
+export default function SignupScreen({ onRegisterSuccess, onNavigateToLogin }: SignupScreenProps) {
+  const [name, setName]               = useState('');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
+  const [confirm, setConfirm]         = useState('');
+  const [showPass, setShowPass]       = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
   const handleRegister = async () => {
     setError(null);
-    if (!validate()) return;
+    if (!name.trim())              { setError('Please enter your name'); return; }
+    if (!email.trim())             { setError('Please enter your email'); return; }
+    if (password.length < 6)       { setError('Password must be at least 6 characters'); return; }
+    if (password !== confirm)      { setError('Passwords do not match'); return; }
 
     setLoading(true);
     try {
-      const user = await registerUser({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-      });
+      const user = await registerUser({ name: name.trim(), email: email.trim(), password });
       onRegisterSuccess(user);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -69,245 +42,199 @@ export default function SignupScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.card}>
-          <View style={styles.brand}>
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>M</Text>
+    <SafeAreaView style={st.safe}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={st.scroll} keyboardShouldPersistTaps="handled">
+
+          {/* Logo */}
+          <View style={st.logoArea}>
+            <View style={st.logoCircle}>
+              <Icon name="medical" size={44} color="#fff" />
             </View>
-            <Text style={styles.title}>Medi Dispenser</Text>
-            <Text style={styles.tagline}>Smart care, right on time.</Text>
+            <Text style={st.appName}>MediDispense</Text>
+            <Text style={st.tagline}>Your smart medicine helper</Text>
           </View>
 
-          <Text style={styles.heading}>Create Account</Text>
+          <View style={st.card}>
+            <Text style={st.heading}>Create Account</Text>
+            <Text style={st.sub}>Fill in the details below to get started</Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
+            {/* Name */}
+            <Text style={st.label}><Icon name="person-outline" size={15} color="#64748B" />{'  '}Your Name</Text>
             <TextInput
-              style={styles.input}
-              placeholder="John Doe"
-              placeholderTextColor="#9CA3AF"
+              style={st.input}
+              placeholder="e.g. Ravi Kumar"
+              placeholderTextColor="#94A3B8"
               value={name}
               onChangeText={setName}
               accessibilityLabel="Full Name"
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            {/* Email */}
+            <Text style={st.label}><Icon name="mail-outline" size={15} color="#64748B" />{'  '}Email Address</Text>
             <TextInput
-              style={styles.input}
+              style={st.input}
               placeholder="you@example.com"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor="#94A3B8"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
               accessibilityLabel="Email"
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
+            {/* Password */}
+            <Text style={st.label}><Icon name="lock-closed-outline" size={15} color="#64748B" />{'  '}Password (min 6 letters)</Text>
+            <View style={st.passWrap}>
               <TextInput
-                style={styles.passwordInput}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry={!showPassword}
+                style={st.passInput}
+                placeholder="Choose a password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPass}
                 value={password}
                 onChangeText={setPassword}
                 accessibilityLabel="Password"
               />
-              <TouchableOpacity
-                style={styles.toggle}
-                onPress={() => setShowPassword((prev: boolean) => !prev)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.toggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+              <TouchableOpacity style={st.eyeBtn} onPress={() => setShowPass(v => !v)} activeOpacity={0.7}>
+                <Icon name={showPass ? 'eye-off-outline' : 'eye-outline'} size={22} color="#64748B" />
               </TouchableOpacity>
             </View>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
+            {/* Confirm */}
+            <Text style={st.label}><Icon name="shield-checkmark-outline" size={15} color="#64748B" />{'  '}Repeat Password</Text>
             <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry={!showPassword}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
+            style={[
+                st.input,
+                confirm && confirm !== password ? st.inputError : null,
+                confirm && confirm === password ? st.inputOk : null,
+              ]}
+              placeholder="Same password again"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry={!showPass}
+              value={confirm}
+              onChangeText={setConfirm}
               accessibilityLabel="Confirm Password"
             />
-          </View>
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
+            {confirm.length > 0 && confirm === password && (
+              <View style={st.matchRow}>
+                <Icon name="checkmark-circle-outline" size={15} color="#059669" />
+                <Text style={st.matchTxt}>Passwords match</Text>
+              </View>
             )}
-          </TouchableOpacity>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={onNavigateToLogin} activeOpacity={0.7}>
-              <Text style={styles.link}>Sign in</Text>
+            {/* Error */}
+            {error && (
+              <View style={st.errorBox}>
+                <Icon name="alert-circle-outline" size={18} color="#DC2626" />
+                <Text style={st.errorTxt}>{error}</Text>
+              </View>
+            )}
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[st.createBtn, loading && st.createBtnBusy]}
+              onPress={handleRegister}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <>
+                    <Icon name="person-add-outline" size={20} color="#fff" />
+                    <Text style={st.createBtnTxt}>Create Account</Text>
+                  </>
+              }
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={st.divider}>
+              <View style={st.divLine} />
+              <Text style={st.divTxt}>Already have an account?</Text>
+              <View style={st.divLine} />
+            </View>
+
+            <TouchableOpacity
+              style={st.loginBtn}
+              onPress={onNavigateToLogin}
+              activeOpacity={0.8}
+            >
+              <Icon name="log-in-outline" size={20} color={PRIMARY} />
+              <Text style={st.loginBtnTxt}>Sign In Instead</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const PRIMARY = '#0D9488';
-const PRIMARY_DARK = '#0F766E';
+const st = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: '#F8FAFC' },
+  scroll: { flexGrow: 1, padding: 24, paddingTop: 32 },
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0FDFA',
+  logoArea: { alignItems: 'center', marginBottom: 32 },
+  logoCircle: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: PRIMARY,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: PRIMARY, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
   },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
+  appName:  { fontSize: 28, fontWeight: '900', color: '#0F172A' },
+  tagline:  { fontSize: 15, color: '#64748B', marginTop: 4 },
+
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    backgroundColor: '#fff', borderRadius: 24, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 16, elevation: 5,
+    marginBottom: 32,
   },
-  brand: {
-    alignItems: 'center',
-    marginBottom: 28,
+  heading: { fontSize: 24, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
+  sub:     { fontSize: 14, color: '#64748B', marginBottom: 24 },
+
+  label:   { fontSize: 15, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 16 },
+  input:   {
+    borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 14,
+    paddingHorizontal: 18, paddingVertical: 16,
+    fontSize: 16, color: '#0F172A', backgroundColor: '#F8FAFC',
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  inputError: { borderColor: '#FCA5A5' },
+  inputOk:    { borderColor: '#6EE7B7' },
+  passWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 14,
+    backgroundColor: '#F8FAFC',
   },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '700',
+  passInput:{ flex: 1, paddingHorizontal: 18, paddingVertical: 16, fontSize: 16, color: '#0F172A' },
+  eyeBtn:   { paddingHorizontal: 16, paddingVertical: 16 },
+
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  matchTxt: { fontSize: 13, color: '#059669', fontWeight: '600' },
+
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEE2E2', borderRadius: 12, padding: 14, marginTop: 14,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
+  errorTxt: { flex: 1, fontSize: 14, color: '#DC2626', fontWeight: '500' },
+
+  createBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: PRIMARY, borderRadius: 14, paddingVertical: 18, marginTop: 24,
+    shadowColor: PRIMARY, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  tagline: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
+  createBtnBusy:{ opacity: 0.7 },
+  createBtnTxt: { fontSize: 18, fontWeight: '800', color: '#fff' },
+
+  divider:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 20 },
+  divLine:  { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  divTxt:   { fontSize: 12, color: '#94A3B8', fontWeight: '500' },
+
+  loginBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderWidth: 2, borderColor: PRIMARY, borderRadius: 14, paddingVertical: 16,
   },
-  heading: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#F9FAFB',
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#111827',
-  },
-  toggle: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  toggleText: {
-    color: PRIMARY_DARK,
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  error: {
-    color: '#DC2626',
-    fontSize: 14,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  footerText: {
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  link: {
-    color: PRIMARY_DARK,
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  loginBtnTxt: { fontSize: 16, fontWeight: '700', color: PRIMARY },
 });
