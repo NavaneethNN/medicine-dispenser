@@ -191,6 +191,8 @@ class DispenserManager:
             self._reset_disc_rotations()
             for cid, dispenser in self.tablet_dispensers.items():
                 dispenser.reset_all()
+            # Reset landing counter so tablets land fresh from base position after reset.
+            TabletDispenser.reset_landed_count()
 
         # ── reset_cartridge ───────────────────────────────────────────
         elif action == "reset_cartridge":

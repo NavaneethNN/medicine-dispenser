@@ -38,6 +38,7 @@ class SocketServer:
     def __init__(self, dispenser_manager):
         self.manager = dispenser_manager
         self._thread = None
+        self._server_socket = None
 
     # ------------------------------------------------------------------
     # Start the server in a background daemon thread
@@ -64,6 +65,8 @@ class SocketServer:
     def _run(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Store reference so restart.py can close this socket from outside
+        self._server_socket = server
         
         try:
             server.bind((config.HOST, config.PORT))

@@ -9,6 +9,29 @@ class TabletDispenser:
 
     ALIGNMENT_TOLERANCE = 8.0
     FALL_FRAMES = 60
+
+    # How far apart (Blender units) each landed tablet is placed from the previous.
+    # Tablets spread along the Y axis to stay within the exit channel walls.
+    # Keep this small enough that all tablets remain inside the dispenser exit.
+    STACK_OFFSET_X = 0.0
+    STACK_OFFSET_Y = 10.0
+
+    # Class-level counter shared across all cartridges — tracks the total number
+    # of tablets that have landed since the last reset so each gets a unique spot.
+    _landed_count = 0
+
+    @classmethod
+    def _next_landing_offset(cls):
+        """Return (x_offset, y_offset) for the next tablet and advance the counter."""
+        x = cls._landed_count * cls.STACK_OFFSET_X
+        y = cls._landed_count * cls.STACK_OFFSET_Y
+        cls._landed_count += 1
+        return x, y
+
+    @classmethod
+    def reset_landed_count(cls):
+        """Call this on system reset so tablets land at the base position again."""
+        cls._landed_count = 0
     
     # Path to saved positions file
     POSITIONS_FILE = "/Users/navaneeth/Documents/Projects/medicine-dispenser/python/tablet_positions.json"
@@ -307,9 +330,14 @@ class TabletDispenser:
 
         start_location = tablet.location.copy()
 
-        target_location = (
-            self.fall_target.matrix_world.translation.copy()
-        )
+        # Base landing position from the fall target object.
+        # Each tablet gets a unique offset so they land beside each other
+        # instead of piling on the exact same spot.
+        base_target = self.fall_target.matrix_world.translation.copy()
+        x_offset, y_offset = TabletDispenser._next_landing_offset()
+        target_location = base_target.copy()
+        target_location.x += x_offset
+        target_location.y += y_offset
 
         tablet.location = start_location
 

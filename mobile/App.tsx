@@ -205,6 +205,7 @@ export default function App() {
           medicines={medicines}
           devices={devices}
           onBack={() => setScreen('home')}
+          onRefresh={refreshAll}
         />
       )}
 

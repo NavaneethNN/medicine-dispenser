@@ -80,10 +80,15 @@ public class DispenseController {
 
         Map<String, Object> response = pythonSocket.dispense(cartridgeId, quantity);
 
-        // Deduct stock on success regardless of whether scheduleId was used
+        // Deduct stock on success for both Option A (scheduleId) and Option B (cartridgeId).
         if ("success".equals(response.get("status"))) {
             if (req.getScheduleId() != null && !req.getScheduleId().isBlank()) {
+                // Option A: resolve medicine via schedule
                 deductStock(req.getScheduleId(), quantity);
+            } else {
+                // Option B: resolve medicine via cartridge slot number
+                // cartridgeId is "C1","C2","C3" → slot is 1,2,3
+                deductStockByCartridge(cartridgeId, quantity);
             }
         } else {
             log.warn("[Dispense] Python returned non-success: {}", response);
@@ -121,6 +126,29 @@ public class DispenseController {
 
         Map<String, Object> response = pythonSocket.reset(cartridgeId);
 
+        // Restore stock in the database to match the physical reset.
+        // Each cartridge holds 8 tablets so quantity goes back to 8.
+        if ("success".equals(response.get("status"))) {
+            if (cartridgeId != null) {
+                // Single cartridge reset — restore only that slot's medicine
+                int slot = Integer.parseInt(cartridgeId.substring(1)); // "C1" → 1
+                medicineRepository.findAll().stream()
+                    .filter(m -> m.getCartridgeSlot() == slot)
+                    .forEach(m -> {
+                        m.setQuantity(8);
+                        medicineRepository.save(m);
+                        log.info("[Dispense] Stock restored: medicine={} qty=8", m.getName());
+                    });
+            } else {
+                // Full reset — restore all medicines
+                medicineRepository.findAll().forEach(m -> {
+                    m.setQuantity(8);
+                    medicineRepository.save(m);
+                    log.info("[Dispense] Stock restored: medicine={} qty=8", m.getName());
+                });
+            }
+        }
+
         return ResponseEntity.ok(response);
     }
 
@@ -147,6 +175,26 @@ public class DispenseController {
             log.info("[Dispense] Stock updated: medicine={} qty={}", med.getName(), newQty);
         } catch (Exception e) {
             log.error("[Dispense] Failed to update stock: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Deducts stock by cartridge slot when no scheduleId is available (Option B / manual dispense).
+     * cartridgeId format: "C1", "C2", "C3" → slot 1, 2, 3.
+     */
+    private void deductStockByCartridge(String cartridgeId, int quantity) {
+        try {
+            int slot = Integer.parseInt(cartridgeId.substring(1)); // "C1" → 1
+            medicineRepository.findAll().stream()
+                .filter(m -> m.getCartridgeSlot() == slot)
+                .forEach(m -> {
+                    int newQty = Math.max(0, m.getQuantity() - quantity);
+                    m.setQuantity(newQty);
+                    medicineRepository.save(m);
+                    log.info("[Dispense] Stock updated: medicine={} qty={}", m.getName(), newQty);
+                });
+        } catch (Exception e) {
+            log.error("[Dispense] Failed to update stock by cartridge: {}", e.getMessage());
         }
     }
 

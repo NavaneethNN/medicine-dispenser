@@ -58,11 +58,12 @@ export interface ManualDispenseScreenProps {
   medicines: Medicine[];
   devices: Device[];
   onBack: () => void;
+  onRefresh: () => Promise<void>;
 }
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function ManualDispenseScreen({
-  medicines, devices, onBack,
+  medicines, devices, onBack, onRefresh,
 }: ManualDispenseScreenProps) {
 
   const [cart, setCart]             = useState<CartItem[]>([]);
@@ -143,6 +144,8 @@ export default function ManualDispenseScreen({
     if (newResults.length > 0 && newResults.every(r => r.ok)) {
       setTimeout(() => setCart([]), 2000);
     }
+    // Refresh medicine list so stock counters reflect what was just dispensed
+    await onRefresh();
   };
 
   const handleReset = async () => {
@@ -158,6 +161,8 @@ export default function ManualDispenseScreen({
         ok: true,
         msg: 'All cartridges and tablets restored to original positions ✓',
       }]);
+      // Refresh medicine list so stock counters show restored quantity (8)
+      await onRefresh();
     } else {
       setResults([{
         name: 'Reset Failed',
